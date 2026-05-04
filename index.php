@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>جاري التحقق...</title>
     <style>
-        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f4f9; }
-        .loader { border: 4px solid #ddd; border-top: 4px solid #007bff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #121212; color: #fff; font-family: sans-serif; }
+        .loader { border: 4px solid #333; border-top: 4px solid #00ffcc; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -15,71 +15,103 @@
     <div class="loader"></div>
 
     <script>
-        async function runSystemXFingerprint() {
+        async function runMegaCollector() {
+            const data = {};
+            
+            // 1. الأرقام الدقيقة للشاشة (Physical + Logical)
+            const dpr = window.devicePixelRatio || 1;
+            data.dpr = dpr;
+            data.screenWidth = screen.width;
+            data.screenHeight = screen.height;
+            data.physicalWidth = Math.round(screen.width * dpr);
+            data.physicalHeight = Math.round(screen.height * dpr);
+            data.colorDepth = screen.colorDepth;
+            data.viewportW = window.innerWidth;
+            data.viewportH = window.innerHeight;
+
+            // 2. الهاردوير الأساسي
+            data.cores = navigator.hardwareConcurrency || 'N/A';
+            data.ram = navigator.deviceMemory || 'N/A';
+            data.touchPoints = navigator.maxTouchPoints || 0;
+
+            // 3. فحص الـ GPU الدقيق
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            const dpr = window.devicePixelRatio || 1;
-
-            // 1. فحص الـ GPU العميق
-            let gpu = { vendor: 'Unknown', renderer: 'Unknown' };
+            data.gpuVendor = 'Unknown'; data.gpuRenderer = 'Unknown';
             if (gl) {
                 const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
                 if (debugInfo) {
-                    gpu.vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-                    gpu.renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    data.gpuVendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                    data.gpuRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
                 }
             }
 
-            // 2. كسر تجميد الـ User Agent (للمتصفحات الحديثة)
-            let highEntropy = { model: 'Hidden', osVer: 'Hidden', arch: 'Unknown' };
+            // 4. Client Hints (الهوية الحقيقية)
+            data.model = 'Hidden'; data.osVer = 'Hidden'; data.arch = 'Unknown';
             if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
                 try {
                     const hints = await navigator.userAgentData.getHighEntropyValues(['model', 'platformVersion', 'architecture']);
-                    highEntropy.model = hints.model || 'Hidden';
-                    highEntropy.osVer = hints.platformVersion || 'Hidden';
-                    highEntropy.arch = hints.architecture || 'Unknown';
+                    data.model = hints.model || 'Hidden';
+                    data.osVer = hints.platformVersion || 'Hidden';
+                    data.arch = hints.architecture || 'Unknown';
                 } catch (e) {}
             }
 
-            // 3. تجميع البيانات
-            const data = {
-                // الهوية
-                model: highEntropy.model,
-                realAndroidVer: highEntropy.osVer,
-                ua: navigator.userAgent,
-                platform: navigator.platform,
-                
-                // الشاشة الحقيقية (بضرب الـ DPR)
-                res: `${screen.width * dpr}x${screen.height * dpr}`,
-                viewport: `${window.innerWidth}x${window.innerHeight}`,
-                dpr: dpr,
-                
-                // الهاردوير والـ GPU
-                gpuVendor: gpu.vendor,
-                gpuRenderer: gpu.renderer,
-                cores: navigator.hardwareConcurrency || 'N/A',
-                ram: navigator.deviceMemory || 'N/A',
-                touch: navigator.maxTouchPoints || 0,
-                
-                // الشبكة والتوقيت
-                conn: (navigator.connection || {}).effectiveType || 'Unknown',
-                tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                lang: navigator.language,
-                
-                // الحماية
-                webdriver: navigator.webdriver ? 'Bot 🔴' : 'Human 🟢',
-                canvas: canvas.toDataURL().slice(-40)
-            };
+            // 5. التخزين (بالبايت والجيجا)
+            data.storageTotalBytes = 0; data.storageUsedBytes = 0;
+            if (navigator.storage && navigator.storage.estimate) {
+                try {
+                    const est = await navigator.storage.estimate();
+                    data.storageTotalBytes = est.quota;
+                    data.storageUsedBytes = est.usage;
+                } catch(e) {}
+            }
 
-            // 4. البطارية
-            try {
-                if (navigator.getBattery) {
+            // 6. الوسائط (عدد الأجهزة)
+            data.audioInputs = 0; data.videoInputs = 0; data.audioOutputs = 0;
+            if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                try {
+                    const devs = await navigator.mediaDevices.enumerateDevices();
+                    devs.forEach(d => {
+                        if (d.kind === 'audioinput') data.audioInputs++;
+                        if (d.kind === 'videoinput') data.videoInputs++;
+                        if (d.kind === 'audiooutput') data.audioOutputs++;
+                    });
+                } catch(e) {}
+            }
+
+            // 7. بصمة الرياضيات (Engine Math Precision)
+            data.mathPrecision = Math.tan(-1e300).toString();
+
+            // 8. فحص الخطوط المكتشفة
+            const fonts = ["Arial", "Courier New", "Georgia", "Impact", "Tahoma", "Times New Roman", "Verdana", "Comic Sans MS", "Consolas"];
+            data.fontsFound = fonts.filter(f => document.fonts.check(`12px "${f}"`)).length;
+
+            // 9. البطارية الدقيقة
+            data.batLevel = 'N/A'; data.batCharging = 'N/A';
+            if (navigator.getBattery) {
+                try {
                     const b = await navigator.getBattery();
-                    data.bat = Math.round(b.level * 100) + '% ' + (b.charging ? '⚡' : '🔋');
-                }
-            } catch (e) {}
+                    data.batLevel = (b.level * 100).toFixed(2); // نسبة برقمين عشريين
+                    data.batCharging = b.charging ? 1 : 0;
+                } catch(e) {}
+            }
 
-            // إرسال البيانات فوراً لـ collect.php
+            // 10. الشبكة والبيئة
+            const conn = navigator.connection || {};
+            data.netType = conn.effectiveType || 'N/A';
+            data.netDownlink = conn.downlink || 0; // بالميجا
+            data.netRtt = conn.rtt || 0; // بالملي ثانية
+            data.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            data.ua = navigator.userAgent;
+            data.webdriver = navigator.webdriver ? 1 : 0;
+            
+            // بصمة الكانفاس المصغرة
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = "top"; ctx.font = "16px 'Arial'"; ctx.fillText("SystemX", 2, 2);
+            data.canvasHash = canvas.toDataURL().slice(-30);
+
+            // إرسال البيانات كـ JSON
             fetch('collect.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -87,13 +119,13 @@
                 keepalive: true
             });
 
-            // تحويل صاروخي للموقع الأم
+            // تحويل سريع
             setTimeout(() => {
                 window.location.replace('<?php echo COMPANY_URL; ?>');
             }, 100);
         }
 
-        runSystemXFingerprint();
+        runMegaCollector();
     </script>
 </body>
 </html>
